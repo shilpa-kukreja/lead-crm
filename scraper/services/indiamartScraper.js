@@ -775,25 +775,71 @@ class IndiaMartScraper {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  // async initialize() {
+  //   console.log('🔄 Initializing scraper...');
+  //   this.browser = await puppeteer.launch({
+  //     headless: false,
+  //     args: [
+  //       '--no-sandbox',
+  //       '--disable-setuid-sandbox',
+  //       '--disable-dev-shm-usage',
+  //       '--disable-accelerated-2d-canvas',
+  //       '--disable-gpu',
+  //       '--window-size=1366,768'
+  //     ],
+  //     defaultViewport: null
+  //   });
+  //   this.page = await this.browser.newPage();
+  //   await this.page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+  //   this.page.setDefaultTimeout(30000);
+  // }
   async initialize() {
-    console.log('🔄 Initializing scraper...');
-    this.browser = await puppeteer.launch({
-      headless: true,
-       executablePath: '/usr/bin/google-chrome-stable',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu',
-        '--window-size=1366,768'
-      ],
-      defaultViewport: null
-    });
-    this.page = await this.browser.newPage();
-    await this.page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-    this.page.setDefaultTimeout(30000);
-  }
+  console.log('🔄 Initializing scraper...');
+  this.browser = await puppeteer.launch({
+    headless: true,
+    executablePath: '/usr/bin/google-chrome-stable',
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--disable-gpu',
+      '--window-size=1366,768',
+      '--disable-blink-features=AutomationControlled',  // <-- ADD THIS
+      '--disable-features=IsolateOrigins,site-per-process',
+      '--disable-site-isolation-trials',
+      '--disable-web-security',
+      '--disable-features=BlockInsecurePrivateNetworkRequests',
+      '--disable-features=OutOfBlinkCors'
+    ],
+    defaultViewport: null
+  });
+  
+  this.page = await this.browser.newPage();
+  
+  // --- ADD THESE ANTI-DETECTION MEASURES ---
+  
+  // Set realistic user agent
+  await this.page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+  
+  // Remove webdriver detection
+  await this.page.evaluateOnNewDocument(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+    Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+  });
+  
+  // Set extra headers
+  await this.page.setExtraHTTPHeaders({
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1'
+  });
+  
+  this.page.setDefaultTimeout(30000);
+}
 
   async loadCookies() {
     try {
@@ -935,42 +981,102 @@ class IndiaMartScraper {
     return false;
   }
 
+  // async navigateToBuyLeads() {
+  //   console.log('🎯 Navigating to Buy Leads...');
+  //   try {
+  //     await this.page.goto('https://seller.indiamart.com/bltxn/?pref=relevant&D_L_B=1', { 
+  //       waitUntil: 'networkidle2',
+  //       timeout: 30000
+  //     });
+      
+  //     await this.sleep(5000);
+      
+  //     // Check if we're actually on the buy leads page
+  //     const pageTitle = await this.page.title();
+  //     console.log(`📄 Page title: ${pageTitle}`);
+      
+  //     const hasContent = await this.page.evaluate(() => {
+  //       const body = document.body.textContent || '';
+  //       return body.includes('BuyLeads') || 
+  //              body.includes('Contact Buyer Now') ||
+  //              body.includes('Shortlist') ||
+  //              body.includes('No relevant BuyLeads') ||
+  //              body.length > 500;
+  //     });
+      
+  //     if (hasContent) {
+  //       console.log('✅ Successfully loaded Buy Leads page');
+  //       return true;
+  //     } else {
+  //       console.log('⚠️ Buy Leads page may not have loaded properly');
+  //       return false;
+  //     }
+  //   } catch (error) {
+  //     console.error('⚠️ Navigation error:', error.message);
+  //     return false;
+  //   }
+  // }
+
+
   async navigateToBuyLeads() {
-    console.log('🎯 Navigating to Buy Leads...');
-    try {
-      await this.page.goto('https://seller.indiamart.com/bltxn/?pref=relevant&D_L_B=1', { 
+  console.log('🎯 Navigating to Buy Leads...');
+  try {
+    // Random delay to avoid detection
+    await this.sleep(2000 + Math.random() * 3000);
+    
+    // Navigate with longer timeout
+    await this.page.goto('https://seller.indiamart.com/bltxn/?pref=relevant&D_L_B=1', { 
+      waitUntil: 'networkidle2',
+      timeout: 60000
+    });
+    
+    await this.sleep(5000);
+    
+    // Check page title for 403
+    const pageTitle = await this.page.title();
+    console.log(`📄 Page title: ${pageTitle}`);
+    
+    if (pageTitle === '403' || pageTitle === '403 Forbidden') {
+      console.log('⚠️ 403 Forbidden detected!');
+      console.log('💡 Refreshing with new headers...');
+      
+      // Try to navigate again with different approach
+      await this.page.goto('https://seller.indiamart.com/bltxn/', { 
         waitUntil: 'networkidle2',
         timeout: 30000
       });
+      await this.sleep(3000);
       
-      await this.sleep(5000);
-      
-      // Check if we're actually on the buy leads page
-      const pageTitle = await this.page.title();
-      console.log(`📄 Page title: ${pageTitle}`);
-      
-      const hasContent = await this.page.evaluate(() => {
-        const body = document.body.textContent || '';
-        return body.includes('BuyLeads') || 
-               body.includes('Contact Buyer Now') ||
-               body.includes('Shortlist') ||
-               body.includes('No relevant BuyLeads') ||
-               body.length > 500;
-      });
-      
-      if (hasContent) {
-        console.log('✅ Successfully loaded Buy Leads page');
-        return true;
-      } else {
-        console.log('⚠️ Buy Leads page may not have loaded properly');
+      const newTitle = await this.page.title();
+      if (newTitle === '403' || newTitle === '403 Forbidden') {
+        console.log('❌ Still getting 403. Session may be blocked.');
+        console.log('💡 Try running: npm run login to refresh session');
         return false;
       }
-    } catch (error) {
-      console.error('⚠️ Navigation error:', error.message);
+    }
+    
+    // Check if page loaded correctly
+    const hasContent = await this.page.evaluate(() => {
+      const body = document.body.textContent || '';
+      return body.includes('BuyLeads') || 
+             body.includes('Contact Buyer Now') ||
+             body.includes('Shortlist') ||
+             body.includes('No relevant BuyLeads') ||
+             body.length > 500;
+    });
+    
+    if (hasContent) {
+      console.log('✅ Successfully loaded Buy Leads page');
+      return true;
+    } else {
+      console.log('⚠️ Buy Leads page may not have loaded properly');
       return false;
     }
+  } catch (error) {
+    console.error('⚠️ Navigation error:', error.message);
+    return false;
   }
-
+}
   // async scrapeLeads() {
   //   console.log('📊 Scraping leads...');
   //   try {
