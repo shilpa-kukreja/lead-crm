@@ -778,7 +778,8 @@ class IndiaMartScraper {
   async initialize() {
     console.log('🔄 Initializing scraper...');
     this.browser = await puppeteer.launch({
-      headless: false,
+      headless: true,
+       executablePath: '/usr/bin/google-chrome-stable',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
